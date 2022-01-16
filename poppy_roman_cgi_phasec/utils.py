@@ -19,9 +19,10 @@ import time
 import glob
 from pathlib import Path
 
+from .import polmap
+
 from importlib import reload
 import misc
-import polmap
 
 def glass_index( glass, lambda_m, cgi_dir ):
     a = np.loadtxt( str( cgi_dir/'glass'/(glass+'_index.txt') ) )  # lambda_um index pairs
