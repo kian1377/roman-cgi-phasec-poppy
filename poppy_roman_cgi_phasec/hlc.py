@@ -26,49 +26,25 @@ from .import polmap
 from .import misc
 
 def run_single(mode='HLC575',
-                wavelength=None,
-                npix=310,
-                oversample=1024/310,
-                npsf=64,
-                psf_pixelscale=13*u.micron/u.pixel,
-                offsets=(0,0),
-                dm1=None,
-                dm2=None,
-                use_fpm=True,
+               wavelength=None,
+               npix=310,
+               oversample=1024/310,
+               npsf=64,
+               psf_pixelscale=13*u.micron/u.pixel,
+               offsets=(0,0),
+               dm1=None,
+               dm2=None,
+               use_fpm=True,
                use_fieldstop=False,
-                use_opds=False,
-                use_pupil_defocus=False,
-                polaxis=0,
-                cgi_dir=None,
-                display_mode=False,
-                show_fpm_steps=False,
-                display_inwave=False,
-                display_intermediates=False,
-                return_intermediates=False):
-    '''
-    This is the function used to calculate a PSF. WebbPSF would make this easier as you can initialize a mode, alter options, and then 
-    calculate a PSF rather than using one function to initialize a mode and putting in options as kwargs to calculate the desired PSF.
-        mode: which mode to calculate a PSF for; 'HLC575', 'SPC730', or 'SPC825'
-        oversample: how much oversampling for the FresnelOpticalSystem's pupil diameter to use, default is 2 for all modes
-        wavelength: wavelength to propagate; if None, the wavelength used will be the modes central wavelength
-        offsets: source offset coordinates provided as a tuple as such (x_offset, y_offset)
-        use_fpm: use the modes FPM or not, default is True
-        use_opds: use individual optic OPDs, default is False
-        use_dms: use DM maps for the given mode, default is False; if True, the DM maps for the correct scenario are applied. The SPC modes
-                 each have one set of DM maps, for when polaxis is 10 and all OPDs are used. The HLC mode has two sets of DM maps, one for 
-                 when no polaxis or OPDs are used since the HLC uses the DMs ton make a dark-hole anyway and another set for when polaxis is 
-                 10 and when OPDs are used. 
-        use_fieldstop: use the fieldstop or not, only useable for the HLC mode
-        use_apertures: use individual optic apertures
-        polaxis: what polarization axis to detremine the polarization aberrations for; will use the polmap function to do so; default is 0, 
-                 meaning no polarization aberration are used
-        cgi_dir: path to the directory containing the POPPY CGI data files
-        display_mode: display some of the mode specific optics; uses the POPPY display functionality for optical elements
-        display_inwave: display the intensity and phase of the input wavefront
-        display_intermediates: display all intermediate optic planes using POPPY's default display_intermediates feature
-        display_fpm: display the FPM wavefront intensity after the FPM is applied or not
-        display_psf: display the final PSF intensity
-    '''
+               use_opds=False,
+               use_pupil_defocus=False,
+               polaxis=0,
+               cgi_dir=None,
+               display_mode=False,
+               show_fpm_steps=False,
+               display_intermediates=False,
+               return_intermediates=False):
+
     reload(misc)
     reload(polmap)
     diam = 2.363114*u.m
@@ -95,7 +71,8 @@ def run_single(mode='HLC575',
 
     diff = np.abs(fpm_lams - wavelength.value)
     w = np.argmin( diff )
-    if diff[w] > 0.1e-9: raise Exception('Only wavelengths within 0.1nm of avalable FPM wavelengths can be used. Closest available to requested wavelength is {}.'.format(fpm_lams[w]))
+    if diff[w] > 0.1e-9: 
+        raise Exception('Only wavelengths within 0.1nm of avalable FPM wavelengths can be used. Closest available to requested wavelength is {}.'.format(fpm_lams[w]))
     fpm_rootname = opticsdir/fpm_root_fnames[w]
 
     fpm_r_fname = str(fpm_rootname)+'real.fits'
@@ -143,7 +120,7 @@ def run_single(mode='HLC575',
     
     # this section defines various optic focal lengths, diameters, and distances between optics.
     fl_pri = 2.838279206904720*u.m
-    sm_despace_m = 0*u.m # despacing of the secondary mirror
+    sm_despace_m = 0*u.m
     d_pri_sec = 2.285150508110035*u.m + sm_despace_m
     fl_sec = -0.654200796568004*u.m
     diam_sec = 0.58166*u.m
@@ -163,8 +140,7 @@ def run_single(mode='HLC575',
     d_m5_ttfold = 0.351125431220770*u.m
     diam_ttfold = 0.06*u.m
     d_ttfold_fsm = d_m5_pupil - d_m5_ttfold 
-    if use_pupil_defocus: 
-        d_ttfold_fsm = d_ttfold_fsm + 0.033609*u.m  # 33.6 mm to put pupil 6 mm from SPC mask
+    if use_pupil_defocus: d_ttfold_fsm = d_ttfold_fsm + 0.033609*u.m  # 33.6 mm to put pupil 6 mm from SPC mask
     diam_fsm = 0.0508*u.m
     d_fsm_oap1 = 0.354826767220001*u.m
     fl_oap1 = 0.503331895563883*u.m
@@ -213,6 +189,8 @@ def run_single(mode='HLC575',
     d_filter_lens = filter_thickness / filter_index + 0.210581269256657095*u.m  # from front of filter
     diam_lens = 0.0104*u.m
     d_lens_fold4 = 0.202432155667761*u.m
+#     if use_pupil_lens != 0: d_lens_fold4 = d_lens_fold4 - 0.0002*u.m # from back of pupil imaging lens
+#     elif use_defocus_lens != 0: d_lens_fold4 = d_lens_fold4 + 0.001*u.m # doublet is 1 mm longer than singlet, so make up for it
     diam_fold4 = 0.036*u.m
     d_fold4_image = 0.050000152941020161*u.m
     
@@ -242,17 +220,17 @@ def run_single(mode='HLC575',
     #################### Define optics
     primary = poppy.QuadraticLens(fl_pri, name='Primary')
     secondary = poppy.QuadraticLens(fl_sec, name='Secondary')
-    poma_fold = poppy.CircularAperture(radius=diam_pomafold/2,name="POMA Fold")
+    poma_fold = poppy.CircularAperture(radius=diam_pomafold/2,name="POMA_Fold")
     m3 = poppy.QuadraticLens(fl_m3, name='M3')
     m4 = poppy.QuadraticLens(fl_m4, name='M4')
     m5 = poppy.QuadraticLens(fl_m5, name='M5')
-    tt_fold = poppy.CircularAperture(radius=diam_ttfold/2,name="TT Fold")
+    tt_fold = poppy.CircularAperture(radius=diam_ttfold/2,name="TT_Fold")
     fsm = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='FSM')
     oap1 = poppy.QuadraticLens(fl_oap1, name='OAP1')
     focm = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='FOCM')
     oap2 = poppy.QuadraticLens(fl_oap2, name='OAP2')
     oap3 = poppy.QuadraticLens(fl_oap3, name='OAP3')
-    fold3 = poppy.CircularAperture(radius=diam_fold3/2,name="Fold 3")
+    fold3 = poppy.CircularAperture(radius=diam_fold3/2,name="Fold3")
     oap4 = poppy.QuadraticLens(fl_oap4, name='OAP4')
     oap5 = poppy.QuadraticLens(fl_oap5, name='OAP5')
     oap6 = poppy.QuadraticLens(fl_oap6, name='OAP6')
@@ -261,8 +239,7 @@ def run_single(mode='HLC575',
     filt = poppy.CircularAperture(radius=diam_filter/2, name='Filter')
     lens_1 = poppy.QuadraticLens(fl_1, name='LENS 1') # first lens of the doublet
     lens_2 = poppy.QuadraticLens(fl_2, name='LENS 2')
-    fold4 = poppy.CircularAperture(radius=diam_fold4/2,name="Fold 4")
-    image = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='focus')
+    fold4 = poppy.CircularAperture(radius=diam_fold4/2,name="Fold4")
     
     if use_opds:
         primary_opd = poppy.FITSOpticalElement('Primary OPD',
@@ -396,7 +373,7 @@ def run_single(mode='HLC575',
         
     fosys1.add_optic(FPM_trans, distance=d_oap5_fpm)
     
-    # create the second part of the optical system
+    #################### Create second part of the optical system
     fosys2 = poppy.FresnelOpticalSystem(name='HLC part 2', npix=npix, beam_ratio=beam_ratio, verbose=True)
     
     fosys2.add_optic(FPM_trans)
@@ -418,30 +395,17 @@ def run_single(mode='HLC575',
     if use_opds: fosys2.add_optic(lens_opd)
         
     fosys2.add_optic(lens_2, distance=d_lens_1_pp2_lens_2_pp1)
+    
     fosys2.add_optic(fold4, distance=d_lens_2_pp2_fold4)
+    
     fosys2.add_detector(pixelscale=psf_pixelscale, fov_pixels=npsf, distance=d_fold4_image)
     
     # calculate a psf from the first optical system to retrieve the final wavefront at the FPM plane 
     start = time.time()
-    wfin1 = utils.make_inwave(cgi_dir, D, wavelength_c, wavelength, npix, oversample, offsets, polaxis, display_inwave) # define the inwave
-    
+    wfin1 = utils.make_inwave(cgi_dir, D, wavelength_c, wavelength, npix, oversample, offsets, polaxis)
     psf1_hdu, wfs1 = fosys1.calc_psf(wavelength=wavelength, inwave=wfin1,
                                      display_intermediates=display_intermediates, 
                                      return_final=True, return_intermediates=return_intermediates)
-    
-#     wavefront0 = proper.prop_get_wavefront(wavefront)
-#     wavefront0 = ffts( wavefront0, 1 )              # to virtual pupil
-#     wavefront0 *= fpm_array[0,0]                    # apply amplitude & phase from FPM clear area
-#     nfpm = fpm_array.shape[0]
-#     fpm_sampling_lamdivD = fpm_sampling_lam0divD * fpm_lam0_m / wavelength    # FPM sampling at current wavelength in wavelength/D
-#     wavefront_fpm = mft2(wavefront0, fpm_sampling_lamdivD, pupil_diam_pix, nfpm, +1)   # MFT to highly-sampled focal plane
-#     wavefront_fpm *= fpm_mask * (fpm_array - 1)      # subtract field inside FPM region, add in FPM-multiplied region
-#     wavefront_fpm = mft2(wavefront_fpm, fpm_sampling_lamdivD, pupil_diam_pix, n, -1)        # MFT back to virtual pupil
-#     wavefront0 += wavefront_fpm
-#     wavefront_fpm = 0
-#     wavefront0 = ffts( wavefront0, -1 )     # back to normally-sampled focal plane to continue propagation
-#     wavefront.wfarr[:,:] = proper.prop_shift_center(wavefront0)
-#     wavefront0 = 0
     
     # perform unique MFT procedure at this FPM plane to apply the FPM data
     wfin2 = copy.deepcopy(wfs1[-1])
@@ -457,8 +421,7 @@ def run_single(mode='HLC575',
     if show_fpm_steps: misc.myimshow2(np.abs(wfin2.wavefront), np.angle(wfin2.wavefront), 'after FFT to virtual pupil', npix=309)
     
     wfin2.wavefront *= fpm_phasor[0,0]
-    if show_fpm_steps: misc.myimshow2(np.abs(wfin2.wavefront), np.angle(wfin2.wavefront), 'after applying FPM clear area in pupil', 
-                                      npix=309)
+    if show_fpm_steps: misc.myimshow2(np.abs(wfin2.wavefront), np.angle(wfin2.wavefront), 'after applying FPM clear area in pupil', npix=309)
     
     mft = poppy.matrixDFT.MatrixFourierTransform(centering='ADJUSTABLE')
     wavefront_fpm = mft.perform(wfin2.wavefront, nfpmlamD, nfpm) # MFT back to highly sampled focal plane
@@ -484,7 +447,7 @@ def run_single(mode='HLC575',
     psf = wfs2[-1].wavefront
     psf_pixelscale = wfs2[-1].pixelscale.to(u.mm/u.pix)
     wfs1[-1] = wfin2 # set the FPM wavefront to be that of the wave after FPM is applied
-    wfs1.pop(-1) #remove the final wavefront from wfs1
+    wfs1.pop(-1) # remove the final wavefront from wfs1
     wfs1.extend(wfs2) # add the second set of wfs to a single list
     
     psf_wf = wfs1[-1].wavefront
