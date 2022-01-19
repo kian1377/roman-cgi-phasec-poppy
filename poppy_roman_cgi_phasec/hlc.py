@@ -53,6 +53,8 @@ def run_single(mode='HLC575',
     #################### Initialize directories and file names for the masks and OPDs    
     opticsdir = cgi_dir/'hlc'
     opddir = cgi_dir/'hlc-opds'
+    dmsdir = cgi_dir/'dms'
+    
     pupil_fname = str(opticsdir/'pupil.fits')
     lyotstop_fname = str(opticsdir/'lyot_rotated.fits')
         
@@ -100,14 +102,15 @@ def run_single(mode='HLC575',
         fieldstop = poppy.CircularAperture(radius=radius, name='HLC Field Stop')
     else: fieldstop = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Field Stop Plane (No Optic)')
     
-    dmdir = Path('C:/Users/Kian Milani/Desktop/dm-maps')
     if dm1 is None: dm1 = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='DM1 Plane (No Optic)')
     elif isinstance(dm1,str): 
-        dm1 = poppy.FITSOpticalElement('DM1', opd=str(opticsdir/dm1), opdunits='meters', planetype=PlaneType.intermediate)
+        dm1 = poppy.FITSOpticalElement('DM1', opd=str(dmsdir/dm1), opdunits='meters', planetype=PlaneType.intermediate)
+        dm1.opd = 2*dm1.opd
 
     if dm2 is None: dm2 = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='DM2 Plane (No Optic)')
     elif isinstance(dm2, str):
-        dm2 = poppy.FITSOpticalElement('DM2', opd=str(opticsdir/dm2), opdunits='meters', planetype=PlaneType.intermediate)
+        dm2 = poppy.FITSOpticalElement('DM2', opd=str(dmsdir/dm2), opdunits='meters', planetype=PlaneType.intermediate)
+        dm2.opd = 2*dm2.opd
     
     if display_mode:
         misc.myimshow(pupil.amplitude, 'Roman Pupil', pxscl=pupil.pixelscale)
@@ -120,6 +123,7 @@ def run_single(mode='HLC575',
     
     # this section defines various optic focal lengths, diameters, and distances between optics.
     fl_pri = 2.838279206904720*u.m
+#     fl_pri = 2.838279325*u.m
     sm_despace_m = 0*u.m
     d_pri_sec = 2.285150508110035*u.m + sm_despace_m
     fl_sec = -0.654200796568004*u.m
@@ -248,7 +252,7 @@ def run_single(mode='HLC575',
         secondary_opd = poppy.FITSOpticalElement('Secondary OPD',
                                                  opd=str(opddir/'roman_phasec_SECONDARY_synthetic_phase_error_V1.0.fits'),
                                                  opdunits='meters', planetype=PlaneType.intermediate)
-        pomafold_opd = poppy.FITSOpticalElement('POMA-Fold OPD',
+        poma_fold_opd = poppy.FITSOpticalElement('POMA-Fold OPD',
                                              opd=str(opddir/'roman_phasec_POMAFOLD_measured_phase_error_V1.1.fits'), opdunits='meters',
                                              planetype=PlaneType.intermediate)
         m3_opd = poppy.FITSOpticalElement('M3 OPD',
@@ -260,7 +264,7 @@ def run_single(mode='HLC575',
         m5_opd = poppy.FITSOpticalElement('M5 OPD',
                                           opd=str(opddir/'roman_phasec_M5_measured_phase_error_V1.1.fits'), opdunits='meters', 
                                           planetype=PlaneType.intermediate)
-        ttfold_opd = poppy.FITSOpticalElement('TT-Fold OPD',
+        tt_fold_opd = poppy.FITSOpticalElement('TT-Fold OPD',
                                              opd=str(opddir/'roman_phasec_TTFOLD_measured_phase_error_V1.1.fits'), opdunits='meters',
                                              planetype=PlaneType.intermediate)
         fsm_opd = poppy.FITSOpticalElement('FSM OPD',
@@ -290,8 +294,8 @@ def run_single(mode='HLC575',
         oap4_opd = poppy.FITSOpticalElement('OAP4 OPD',
                                             opd=str(opddir/'roman_phasec_OAP4_phase_error_V3.0.fits'), opdunits='meters',
                                             planetype=PlaneType.intermediate)
-        spm_opd = poppy.FITSOpticalElement('SPM OPD',
-                                           opd=str(opddir/'roman_phasec_PUPILMASK_phase_error_V1.0.fits'), opdunits='meters',
+        pupil_fold_opd = poppy.FITSOpticalElement('SPM OPD',
+                                           opd=str(opddir/'roman_phasec_PUPILFOLD_phase_error_V1.0.fits'), opdunits='meters',
                                            planetype=PlaneType.intermediate)
         oap5_opd = poppy.FITSOpticalElement('OAP5 OPD',
                                             opd=str(opddir/'roman_phasec_OAP5_phase_error_V3.0.fits'), opdunits='meters',
@@ -324,7 +328,7 @@ def run_single(mode='HLC575',
     if use_opds: fosys1.add_optic(secondary_opd)
         
     fosys1.add_optic(poma_fold, distance=d_sec_pomafold)
-    if use_opds: fosys1.add_optic(pomafold_opd)
+    if use_opds: fosys1.add_optic(poma_fold_opd)
         
     fosys1.add_optic(m3, distance=d_pomafold_m3)
     if use_opds: fosys1.add_optic(m3_opd)
@@ -336,7 +340,7 @@ def run_single(mode='HLC575',
     if use_opds: fosys1.add_optic(m5_opd)
         
     fosys1.add_optic(tt_fold, distance=d_m5_ttfold)
-    if use_opds: fosys1.add_optic(ttfold_opd)
+    if use_opds: fosys1.add_optic(tt_fold_opd)
         
     fosys1.add_optic(fsm, distance=d_ttfold_fsm)
     if use_opds: fosys1.add_optic(fsm_opd)
@@ -366,7 +370,7 @@ def run_single(mode='HLC575',
     if use_opds: fosys1.add_optic(oap4_opd)
         
     fosys1.add_optic(SPM, distance=d_oap4_pupilmask)
-    if use_opds: fosys1.add_optic(spm_opd)
+    if use_opds: fosys1.add_optic(pupil_fold_opd)
         
     fosys1.add_optic(oap5, distance=d_pupilmask_oap5)
     if use_opds: fosys1.add_optic(oap5_opd)
@@ -381,10 +385,12 @@ def run_single(mode='HLC575',
     if use_opds: fosys2.add_optic(oap6_opd)
         
     fosys2.add_optic(LS, distance=d_oap6_lyotstop)
+    
     fosys2.add_optic(oap7, distance=d_lyotstop_oap7)
     if use_opds: fosys2.add_optic(oap7_opd)
         
     fosys2.add_optic(fieldstop, distance=d_oap7_fieldstop)
+    
     fosys2.add_optic(oap8, distance=d_fieldstop_oap8)
     if use_opds: fosys2.add_optic(oap8_opd)
         
@@ -415,6 +421,20 @@ def run_single(mode='HLC575',
     nfpm = fpm_phasor.shape[0]
     n = wfin2.wavefront.shape[0]
     nfpmlamD = nfpm*fpm_pxscl_lamD*wfin2.oversample
+    
+    # use MFTs to use super-sampled FPM
+#     wavefront0 = ffts( wavefront0, 1 )              # to virtual pupil
+#     wavefront0 *= fpm_array[0,0]                    # apply amplitude & phase from FPM clear area
+#     nfpm = fpm_array.shape[0]
+#     fpm_sampling_lamdivD = fpm_sampling_lam0divD * fpm_lam0_m / lambda_m    # FPM sampling at current wavelength in lambda_m/D
+#     wavefront_fpm = mft2(wavefront0, fpm_sampling_lamdivD, pupil_diam_pix, nfpm, +1)   # MFT to highly-sampled focal plane
+#     wavefront_fpm *= fpm_mask * (fpm_array - 1)      # subtract field inside FPM region, add in FPM-multiplied region
+#     wavefront_fpm = mft2(wavefront_fpm, fpm_sampling_lamdivD, pupil_diam_pix, n, -1)        # MFT back to virtual pupil
+#     wavefront0 += wavefront_fpm
+#     wavefront_fpm = 0
+#     wavefront0 = ffts( wavefront0, -1 )     # back to normally-sampled focal plane to continue propagation
+#     wavefront.wfarr[:,:] = proper.prop_shift_center(wavefront0)
+#     wavefront0 = 0
     
     wfin2.wavefront = accel_math._ifftshift(wfin2.wavefront)
     wfin2.wavefront = accel_math.fft_2d(wfin2.wavefront, forward=False, fftshift=True) # do a forward FFT to virtual pupil

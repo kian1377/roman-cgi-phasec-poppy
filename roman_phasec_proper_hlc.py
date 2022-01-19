@@ -14,9 +14,11 @@ import misc
 display_wfs = False
 save_wfs = False
 save_maps = False
+save_dms = False
 
 cgi_dir = Path('/groups/douglase/kians-data-files/roman-cgi-phasec-data')
 map_dir_new = cgi_dir/'hlc-opds'
+dm_map_dir_new = cgi_dir/'dms'
 wf_dir = Path('/groups/douglase/kians-data-files/roman-cgi-wfs/hlc')
 
 def display_wave(wavefront, name):
@@ -50,6 +52,16 @@ def save_map(dmap, wavefront, fname):
     map_fpath = map_dir_new/fname
     dmaphdu.writeto(map_fpath, overwrite=True)
     print('OPD map saved to: '+str(map_fpath))
+    
+def save_dm_map(dmap, wavefront, fname):
+    sampling = proper.prop_get_sampling(wavefront)
+    dmaphdr = fits.Header()
+    dmaphdr['PIXELSCL'] = sampling
+    dmaphdu = fits.PrimaryHDU(data=dmap, header=dmaphdr)
+    
+    map_fpath = dm_map_dir_new/fname
+    dmaphdu.writeto(map_fpath, overwrite=True)
+    print('DM map saved to: '+str(map_fpath))
 
 
 ###############################################################################33
@@ -123,7 +135,7 @@ def to_from_doublet( wavefront, dz_to_lens, dz_from_lens,
     proper.prop_lens( wavefront, f_a, surface_name+' lens #1' )
     if ERROR_MAP_FILES != ' ':
         dmap = proper.prop_errormap( wavefront, ERROR_MAP_FILES[0], WAVEFRONT=True )
-        if save_maps: save_map(dmap, wavefront, ERROR_MAP_FILES[0])
+        if save_maps: save_map(dmap, wavefront, 'roman_phasec_LENS_phase_error_V1.0.fits')
     
     if display_wfs: display_wave(wavefront, surface_name+'_lens1')
     if save_wfs: save_wf(wavefront, (surface_name +'_lens1').lower())
@@ -133,7 +145,7 @@ def to_from_doublet( wavefront, dz_to_lens, dz_from_lens,
     if ERROR_MAP_FILES != ' ':
         if ERROR_MAP_FILES[1] != ' ':
             dmap = proper.prop_errormap( wavefront, ERROR_MAP_FILES[1], WAVEFRONT=True )
-            if save_maps: save_map(dmap, wavefront, ERROR_MAP_FILES[1])
+#             if save_maps: save_map(dmap, wavefront, ERROR_MAP_FILES[1])
     
     if display_wfs: display_wave(wavefront, surface_name+'_lens2')
     if save_wfs: save_wf(wavefront, (surface_name+'_lens2').lower())
@@ -563,13 +575,19 @@ def run_hlc(cor_type='hlc', lambda_m=575e-9, final_sampling_lam0=0.1, output_dim
     else:
         dm1 = dm1_m
         dm2 = dm2_m
-    if use_dm1 != 0: proper.prop_dm( wavefront, dm1, dm1_xc_act, dm1_yc_act, dm_sampling_m, XTILT=dm1_xtilt_deg, YTILT=dm1_ytilt_deg, ZTILT=dm1_ztilt_deg )
+    if use_dm1 != 0: 
+        dmap = proper.prop_dm(wavefront, dm1, dm1_xc_act, dm1_yc_act, dm_sampling_m, 
+                              XTILT=dm1_xtilt_deg, YTILT=dm1_ytilt_deg, ZTILT=dm1_ztilt_deg )
+        if save_dms: save_dm_map(dmap, wavefront, 'hlc_best_contrast_dm1.fits') ################################
 
     if display_wfs: display_wave(wavefront, 'dm1')
     if save_wfs: save_wf(wavefront, 'dm1')
 
     proper.prop_propagate( wavefront, d_dm1_dm2, 'DM2' )
-    if use_dm2 == 1: proper.prop_dm( wavefront, dm2, dm2_xc_act, dm2_yc_act, dm_sampling_m, XTILT=dm2_xtilt_deg, YTILT=dm2_ytilt_deg, ZTILT=dm2_ztilt_deg )
+    if use_dm2 == 1: 
+        dmap = proper.prop_dm(wavefront, dm2, dm2_xc_act, dm2_yc_act, dm_sampling_m, 
+                              XTILT=dm2_xtilt_deg, YTILT=dm2_ytilt_deg, ZTILT=dm2_ztilt_deg )
+        if save_dms: save_dm_map(dmap, wavefront, 'hlc_best_contrast_dm2.fits') ##################################
     if use_errors != 0: 
         dmap = proper.prop_errormap( wavefront, map_dir+'roman_phasec_DM2_phase_error_V1.0.fits', WAVEFRONT=True )
         if save_maps: save_map(dmap, wavefront, 'roman_phasec_DM2_phase_error_V1.0.fits')
@@ -922,8 +940,8 @@ def run_hlc(cor_type='hlc', lambda_m=575e-9, final_sampling_lam0=0.1, output_dim
     wf_phase = np.angle(wf_arr)
     wf_sampling = sampling_m
 
-    if display_wfs: misc.myimshow2(wf_int, wf_phase, lognorm1=True,
-                                   pxscl1=sampling_m*u.m/u.pix, pxscl2=sampling_m*u.m/u.pix)
+    misc.myimshow2(wf_int, wf_phase, lognorm1=True, pxscl1=sampling_m*u.m/u.pix, pxscl2=sampling_m*u.m/u.pix)
+    
     if save_wfs: 
         wf = np.zeros(shape=(2, wf_int.shape[0], wf_int.shape[0]))
         wf[0,:,:] = wf_int

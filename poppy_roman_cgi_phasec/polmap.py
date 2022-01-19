@@ -28,7 +28,7 @@ def polmap( wavefront, polfile, pupil_diam_pix, condition, MUF=1.0 ):
 #     lambda_m = proper.prop_get_wavelength(wavefront)
     n = wavefront.wavefront.shape[0]
     lambda_m = wavefront.wavelength.value
-
+    
     if condition <= 2:
         (amp, pha) = polab( polfile, lambda_m, pupil_diam_pix, condition )
     elif condition == 5:
@@ -54,7 +54,7 @@ def polmap( wavefront, polfile, pupil_diam_pix, condition, MUF=1.0 ):
 #     proper.prop_multiply( wavefront, trim(amp,n) ) 
 #     proper.prop_add_phase( wavefront, trim(MUF*pha,n) )
     wavefront.wavefront *= pad_or_crop(amp*np.exp(1j*(2*np.pi/lambda_m)*pha), n)
-
+    
     amp = 0
     phase = 0
     amp_p45x = 0
@@ -67,8 +67,6 @@ def polmap( wavefront, polfile, pupil_diam_pix, condition, MUF=1.0 ):
     pha_m45y = 0
 
     return 
-
-
 
 # polfile: rootname of file containing polarization coefficients
 # lambda_m: wavelength in meters
@@ -172,4 +170,3 @@ def polab( polfile, lambda_m, pupil_diam_pix, condition ):
                 pha[j,:] = map
 
     return amp, pha
-
