@@ -6,16 +6,19 @@ import time
 from pathlib import Path
 from scipy.interpolate import interp1d
 
+import warnings
+
 import poppy
 from poppy.poppy_core import PlaneType
 
 import ray
 
-from . import hlc, spc, polmap, spc_v2
+from . import hlc, spc, polmap, hlc_v2, spc_v2
 
 from importlib import reload
 reload(hlc)
 reload(spc)
+reload(hlc_v2)
 reload(spc_v2)
 reload(polmap)
 
@@ -91,7 +94,24 @@ class CGI():
             self.init_opds()
         
         self.return_intermediates = return_intermediates
-    
+        
+    def copy_mode_settings(self, nactors=1):
+        settings = []
+        for i in range(nactors):
+            settings.append({'cgi_mode':self.cgi_mode,
+                             'wavelength':self.wavelength, 
+                             'npsf':self.npsf, 
+                             'psf_pixelscale':self.psf_pixelscale, 
+                             'interp_order':self.interp_order,
+                             'offset':self.offset,  
+                             'use_fpm':self.use_fpm,
+                             'use_fieldstop':self.use_fieldstop,
+                             'use_pupil_defocus':self.use_pupil_defocus,
+                             'use_opds':self.use_opds, 
+                             'polaxis':self.polaxis,
+                             'return_intermediates':self.return_intermediates})
+        return settings
+           
     def init_mode_optics(self):
         self.FPM_plane = poppy.ScalarTransmission('FPM Plane (No Optic)', planetype=PlaneType.intermediate) # placeholder
         
@@ -124,12 +144,9 @@ class CGI():
 
                 fpm_r = fits.getdata(fpm_r_fname)
                 fpm_i = fits.getdata(fpm_i_fname)
-                if poppy.accel_math._USE_CUPY:
-                    fpm_r = cp.array(fpm_r)
-                    fpm_i = cp.array(fpm_i)
                     
                 self.fpm_phasor = fpm_r + 1j*fpm_i
-                self.fpm_mask = (fpm_r != fpm_r[-1,-1]).astype(int)
+                self.fpm_mask = (fpm_r != fpm_r[0,0]).astype(int)
                 self.fpm_ref_wavelength = fits.getheader(fpm_r_fname)['WAVELENC']
                 self.fpm_pixelscale_lamD = fits.getheader(fpm_r_fname)['PIXSCLLD']
             else:
@@ -398,10 +415,31 @@ class CGI():
             wfs = hlc.run(self)
         else:
             wfs = spc.run(self)
+            
+        if not self.return_intermediates:
+            wfs = wfs[-1]
+            
         if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
             
         return wfs
-        
+
+    def calc_psf2(self, quiet=False):
+        start = time.time()
+        if not quiet: print('Propagating wavelength {:.3f}.'.format(self.wavelength.to(u.nm)))
+            
+        self.init_inwave()
+        if self.cgi_mode=='hlc':
+            wfs = hlc_v2.run(self)
+        else:
+            wfs = spc_v2.run(self)
+            
+        if not self.return_intermediates:
+            wfs = wfs[-1]
+            
+        if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
+            
+        return wfs
+    
 CGIR = ray.remote(CGI)
         
 def create_actors(ncpus=32, ngpus=1, settings=[{'cgi_mode':'hlc', 
@@ -435,13 +473,36 @@ def create_actors(ncpus=32, ngpus=1, settings=[{'cgi_mode':'hlc',
     
 
 def calc_psfs(actors, quiet=True):
+    start = time.time()
+    
     pending_wfs = []
     for i in range(len(actors)):
         future_wfs = actors[i].calc_psf.remote(quiet=quiet)
         pending_wfs.append(future_wfs)
-    return ray.get(pending_wfs)
+    wfs = ray.get(pending_wfs)
+    
+    if not quiet: print('All PSFs calculated in {:.3f}s'.format(time.time()-start))
+    return wfs
 
 
+
+@ray.remote
+def _calc_psf(CGI, quiet=False):
+    start = time.time()
+    if not quiet: print('Propagating wavelength {:.3f}.'.format(CGI.wavelength.to(u.nm)))
+
+    CGI.init_inwave()
+    if CGI.cgi_mode=='hlc':
+        wfs = hlc.run(CGI)
+    else:
+        wfs = spc.run(CGI)
+
+    if not CGI.return_intermediates:
+        wfs = wfs[-1]
+
+    if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
+
+    return wfs   
 
 
 

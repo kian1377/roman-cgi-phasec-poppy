@@ -3,9 +3,11 @@
 # ------------------------------------------------------------------
 
 import numpy as np
-import cupy as cp
-import math
 import poppy
+from poppy.accel_math import _ncp
+
+
+import math
 from scipy.interpolate import interp1d
     
 import proper
@@ -26,6 +28,9 @@ from roman_phasec_proper import trim
 #    contrast evaluation must be done by computing each in/out condition separately
 
 def polmap( wavefront, polfile, pupil_diam_pix, condition, MUF=1.0 ):
+    global _ncp
+    from poppy.accel_math import _ncp
+    
 #     n = proper.prop_get_gridsize( wavefront )
 #     lambda_m = proper.prop_get_wavelength(wavefront)
     n = wavefront.wavefront.shape[0]
@@ -55,10 +60,11 @@ def polmap( wavefront, polfile, pupil_diam_pix, condition, MUF=1.0 ):
 
 #     proper.prop_multiply( wavefront, trim(amp,n) ) 
 #     proper.prop_add_phase( wavefront, trim(MUF*pha,n) )
-    if poppy.accel_math._USE_CUPY:
-        wavefront.wavefront *= poppy.utils.pad_or_crop_to_shape(amp*cp.exp(1j*(2*np.pi/lambda_m)*MUF*pha), (n,n))
-    else:
-        wavefront.wavefront *= poppy.utils.pad_or_crop_to_shape(amp*np.exp(1j*(2*np.pi/lambda_m)*MUF*pha), (n,n))
+#     if poppy.accel_math._USE_CUPY:
+#         wavefront.wavefront *= poppy.utils.pad_or_crop_to_shape(amp*cp.exp(1j*(2*np.pi/lambda_m)*MUF*pha), (n,n))
+#     else:
+#         wavefront.wavefront *= poppy.utils.pad_or_crop_to_shape(amp*np.exp(1j*(2*np.pi/lambda_m)*MUF*pha), (n,n))
+    wavefront.wavefront *= poppy.utils.pad_or_crop_to_shape(amp*np.exp(1j*(2*np.pi/lambda_m)*MUF*pha), (n,n))
     
     amp = 0
     phase = 0
@@ -101,6 +107,8 @@ def polab( polfile, lambda_m, pupil_diam_pix, condition ):
 
     zamp_array = proper.prop_fits_read( polfile+'_amp.fits' )
     zpha_array = proper.prop_fits_read( polfile+'_pha.fits' )
+#     zamp_array = np.array(proper.prop_fits_read( polfile+'_amp.fits' ))
+#     zpha_array = np.array(proper.prop_fits_read( polfile+'_pha.fits' ))
         
     nlam = zamp_array.shape[2]
     if nlam == 6:
@@ -110,8 +118,8 @@ def polab( polfile, lambda_m, pupil_diam_pix, condition ):
 
     # interpolate to get zernikes at specified wavelength
 
-    zamp = np.zeros([22])
-    zpha = np.zeros([22])
+    zamp = _ncp.zeros([22])
+    zpha = _ncp.zeros([22])
 
     for iz in range(0, 22):
         famp = interp1d( lam_array_m, zamp_array[dir_out, dir_in, :, iz], kind='linear' )
@@ -124,23 +132,23 @@ def polab( polfile, lambda_m, pupil_diam_pix, condition ):
 
     n = int(round(pupil_diam_pix * 1.1))
     n = (n // 2) * 2     # force even 
-    x = (np.arange(n) - n//2) / (pupil_diam_pix/2.0)
+    x = (_ncp.arange(n) - n//2) / (pupil_diam_pix/2.0)
 
-    amp = np.zeros([n,n])
-    pha = np.zeros([n,n])
+    amp = _ncp.zeros([n,n])
+    pha = _ncp.zeros([n,n])
 
     for j in range(0, n):
         y = x[j]
         r2 = x**2 + y**2
-        r = np.sqrt(r2)
+        r = _ncp.sqrt(r2)
         r3 = r**3
         r4 = r**4
         r5 = r**5
         r6 = r**6
-        t = np.arctan2(y,x)
+        t = _ncp.arctan2(y,x)
 
         for itype in range(0,2):        # 0 = amp, 1 = phase
-            map = np.zeros([n])
+            map = _ncp.zeros([n])
 
             if itype == 0:
                 z = zamp
@@ -151,23 +159,23 @@ def polab( polfile, lambda_m, pupil_diam_pix, condition ):
             map += (z[1] * 2 * x)                # x tilt
             map += (z[2] * 2 * y)                # y tilt
             map += (z[3] * np.sqrt(3) * (2*r2 - 1))            # focus
-            map += (z[4] * np.sqrt(6) * r2 * np.sin(2*t))        # 45 deg astig
-            map += (z[5] * np.sqrt(6) * r2 * np.cos(2*t))        # 0 deg astig
-            map += (z[6] * np.sqrt(8) * (3*r3 - 2*r) * np.sin(t))      # y coma
-            map += (z[7] * np.sqrt(8) * (3*r3 - 2*r) * np.cos(t))    # x coma
-            map += (z[8] * np.sqrt(8) * r3 * np.sin(3*t))        # y trefoil 
-            map += (z[9] * np.sqrt(8) * r3 * np.cos(3*t))        # x trefoil 
+            map += (z[4] * np.sqrt(6) * r2 * _ncp.sin(2*t))        # 45 deg astig
+            map += (z[5] * np.sqrt(6) * r2 * _ncp.cos(2*t))        # 0 deg astig
+            map += (z[6] * np.sqrt(8) * (3*r3 - 2*r) * _ncp.sin(t))      # y coma
+            map += (z[7] * np.sqrt(8) * (3*r3 - 2*r) * _ncp.cos(t))    # x coma
+            map += (z[8] * np.sqrt(8) * r3 * _ncp.sin(3*t))        # y trefoil 
+            map += (z[9] * np.sqrt(8) * r3 * _ncp.cos(3*t))        # x trefoil 
             map += (z[10] * np.sqrt(5) * (6*r4 - 6*r2 + 1))        # spherical
-            map += (z[11] * np.sqrt(10) * (4*r4 - 3*r2) * np.cos(2*t))
-            map += (z[12] * np.sqrt(10) * (4*r4 - 3*r2) * np.sin(2*t))
-            map += (z[13] * np.sqrt(10) * r4 * np.cos(4*t))
-            map += (z[14] * np.sqrt(10) * r4 * np.sin(4*t))
-            map += (z[15] * np.sqrt(12) * (10*r5 - 12*r3 + 3*r) * np.cos(t))
-            map += (z[16] * np.sqrt(12) * (10*r5 - 12*r3 + 3*r) * np.sin(t))
-            map += (z[17] * np.sqrt(12) * (5*r5 - 4*r3) * np.cos(3*t))
-            map += (z[18] * np.sqrt(12) * (5*r5 - 4*r3) * np.sin(3*t))
-            map += (z[19] * np.sqrt(12) * r5 * np.cos(5*t))
-            map += (z[20] * np.sqrt(12) * r5 * np.sin(5*t))
+            map += (z[11] * np.sqrt(10) * (4*r4 - 3*r2) * _ncp.cos(2*t))
+            map += (z[12] * np.sqrt(10) * (4*r4 - 3*r2) * _ncp.sin(2*t))
+            map += (z[13] * np.sqrt(10) * r4 * _ncp.cos(4*t))
+            map += (z[14] * np.sqrt(10) * r4 * _ncp.sin(4*t))
+            map += (z[15] * np.sqrt(12) * (10*r5 - 12*r3 + 3*r) * _ncp.cos(t))
+            map += (z[16] * np.sqrt(12) * (10*r5 - 12*r3 + 3*r) * _ncp.sin(t))
+            map += (z[17] * np.sqrt(12) * (5*r5 - 4*r3) * _ncp.cos(3*t))
+            map += (z[18] * np.sqrt(12) * (5*r5 - 4*r3) * _ncp.sin(3*t))
+            map += (z[19] * np.sqrt(12) * r5 * _ncp.cos(5*t))
+            map += (z[20] * np.sqrt(12) * r5 * _ncp.sin(5*t))
             map += (z[21] * np.sqrt(7) * (20*r6 - 30*r4 + 12*r2 - 1))
 
             if itype == 0:
@@ -175,9 +183,9 @@ def polab( polfile, lambda_m, pupil_diam_pix, condition ):
             else:
                 pha[j,:] = map
                 
-    if poppy.accel_math._USE_CUPY:
-        amp = cp.array(amp)
-        pha = cp.array(pha)
+#     if poppy.accel_math._USE_CUPY:
+#         amp = cp.array(amp)
+#         pha = cp.array(pha)
     return amp, pha
 
 
