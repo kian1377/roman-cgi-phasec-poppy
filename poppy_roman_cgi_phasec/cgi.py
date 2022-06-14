@@ -158,7 +158,7 @@ class CGI():
             
             if self.use_fieldstop: 
                 radius = 9.7/(309/(self.npix*self.oversample)) * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m
-                self.fieldstop = poppy.CircularAperture(radius=radius, name='HLC Field Stop', gray_pixel=False)
+                self.fieldstop = poppy.CircularAperture(radius=radius, name='HLC Field Stop')
             else: 
                 self.fieldstop = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Field Stop Plane (No Optic)')
                 
