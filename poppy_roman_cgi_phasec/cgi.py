@@ -368,43 +368,6 @@ class CGI():
         self.lens_opd = poppy.FITSOpticalElement('LENS OPD', 
                                             opd=str(opddir/'roman_phasec_LENS_phase_error_V1.0.fits'), 
                                             opdunits=opdunits, planetype=PlaneType.intermediate)
-    
-    def add_noise(self, image):
-        peak_photons = self.peak_photon_flux * self.texp
-        peak_electrons = self.detector_gain * peak_photons
-
-        image_in_electrons = peak_electrons.value * image
-
-        # Add photon shot noise
-        if type(image) is np.ndarray:
-            noisy_image_in_electrons = np.random.poisson(image_in_electrons)
-        else:
-            noisy_image_in_electrons = cp.random.poisson(image_in_electrons)
-
-        # Compute dark current
-        if type(image) is np.ndarray:
-            dark_current = (self.dark_rate * self.texp).value * np.ones_like(image)
-            dark_current = np.random.poisson(dark_current)
-        else:
-            dark_current = (self.dark_rate * self.texp).value * cp.ones_like(image)
-            dark_current = cp.random.poisson(dark_current)
-
-        # Compute Gaussian read noise
-        if type(image) is np.ndarray:
-            read_noise = self.read_noise_std.value * np.random.randn(image.shape[0], image.shape[1])
-        else:
-            read_noise = self.read_noise_std.value * cp.random.randn(image.shape[0], image.shape[1])
-
-        # Convert back from e- to counts and then discretize
-        if type(image) is np.ndarray:
-            image_in_photons = np.round( (noisy_image_in_electrons + dark_current + read_noise) / self.detector_gain.value)
-        else:
-            image_in_photons = cp.round( (noisy_image_in_electrons + dark_current + read_noise) / self.detector_gain.value)
-
-        # Convert back from counts to normalized intensity
-        noisy_image = image_in_photons / self.peak_photon_flux.value
-
-        return noisy_image
 
     def calc_psf(self, quiet=False):
         start = time.time()
@@ -423,7 +386,7 @@ class CGI():
             
         return wfs
 
-    def calc_psf2(self, quiet=False):
+    def calc_psf_v2(self, quiet=False):
         start = time.time()
         if not quiet: print('Propagating wavelength {:.3f}.'.format(self.wavelength.to(u.nm)))
             
@@ -441,7 +404,9 @@ class CGI():
         return wfs
     
 CGIR = ray.remote(CGI)
-        
+
+# Create list of actors by supplying a list of settings
+# Each settings entry is a dictionary
 def create_actors(ncpus=32, ngpus=1, settings=[{'cgi_mode':'hlc', 
                                                 'wavelength':None, 
                                                 'npsf':64, 
@@ -471,7 +436,7 @@ def create_actors(ncpus=32, ngpus=1, settings=[{'cgi_mode':'hlc',
     
     return actors
     
-
+# Calculate PSF for a given list of actors
 def calc_psfs(actors, quiet=True):
     start = time.time()
     
@@ -483,27 +448,6 @@ def calc_psfs(actors, quiet=True):
     
     if not quiet: print('All PSFs calculated in {:.3f}s'.format(time.time()-start))
     return wfs
-
-
-
-@ray.remote
-def _calc_psf(CGI, quiet=False):
-    start = time.time()
-    if not quiet: print('Propagating wavelength {:.3f}.'.format(CGI.wavelength.to(u.nm)))
-
-    CGI.init_inwave()
-    if CGI.cgi_mode=='hlc':
-        wfs = hlc.run(CGI)
-    else:
-        wfs = spc.run(CGI)
-
-    if not CGI.return_intermediates:
-        wfs = wfs[-1]
-
-    if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
-
-    return wfs   
-
 
 
 
