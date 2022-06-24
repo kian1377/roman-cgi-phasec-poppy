@@ -232,22 +232,8 @@ def run(HLC):
         n = inwave2.wavefront.shape[0]
         nfpmlamD = nfpm*fpm_pxscl_lamD*inwave2.oversample
         mft = poppy.matrixDFT.MatrixFourierTransform(centering='ADJUSTABLE')
-        
-        # use MFTs to use super-sampled FPM
-#         wavefront0 = proper.prop_get_wavefront(wavefront)
-#         wavefront0 = ffts( wavefront0, 1 )              # to virtual pupil
-#         wavefront0 *= fpm_array[0,0]                    # apply amplitude & phase from FPM clear area
-#         nfpm = fpm_array.shape[0]
-#         fpm_sampling_lamdivD = fpm_sampling_lam0divD * fpm_lam0_m / lambda_m    # FPM sampling at current wavelength in lambda_m/D
-#         wavefront_fpm = mft2(wavefront0, fpm_sampling_lamdivD, pupil_diam_pix, nfpm, +1)   # MFT to highly-sampled focal plane
-#         wavefront_fpm *= fpm_mask * (fpm_array - 1)      # subtract field inside FPM region, add in FPM-multiplied region
-#         wavefront_fpm = mft2(wavefront_fpm, fpm_sampling_lamdivD, pupil_diam_pix, n, -1)        # MFT back to virtual pupil
-#         wavefront0 += wavefront_fpm
-#         wavefront_fpm = 0
-#         wavefront0 = ffts( wavefront0, -1 )     # back to normally-sampled focal plane to continue propagation
-#         wavefront.wfarr[:,:] = proper.prop_shift_center(wavefront0)
 
-        # Apply the FPM
+        # Apply the FPM with MFTs
         inwave2.wavefront = accel_math._ifftshift(inwave2.wavefront)
         inwave2.wavefront = accel_math.fft_2d(inwave2.wavefront, forward=False, fftshift=True) # do a forward FFT to virtual pupil
         inwave2.wavefront *= HLC.fpm_phasor[-1,-1]
@@ -267,6 +253,7 @@ def run(HLC):
                                             return_final=True, return_intermediates=HLC.return_intermediates,)
     
     if HLC.return_intermediates:
+        wfs_to_fpm.pop(-1)
         wfs = wfs_to_fpm + wfs_from_fpm
     else: 
         wfs = wfs_from_fpm

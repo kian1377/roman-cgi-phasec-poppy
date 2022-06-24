@@ -13,17 +13,15 @@ from poppy.poppy_core import PlaneType
 
 import ray
 
-from . import hlc, spc, polmap, hlc_v2, spc_v2
+from . import hlc, spc, polmap
 
 from importlib import reload
 reload(hlc)
 reload(spc)
-reload(hlc_v2)
-reload(spc_v2)
 reload(polmap)
 
 cgi_dir = Path('/groups/douglase/kians-data-files/roman-cgi-phasec-data')
-dm_dir = Path('/groups/douglase/kians-data-files/roman-cgi-phasec-data/dm-acts')
+dm_dir = cgi_dir/'dm-acts'
 
 class CGI():
 
@@ -146,7 +144,10 @@ class CGI():
                 fpm_i = fits.getdata(fpm_i_fname)
                     
                 self.fpm_phasor = fpm_r + 1j*fpm_i
-                self.fpm_mask = (fpm_r != fpm_r[0,0]).astype(int)
+                
+                print(fpm_r.shape)
+#                 self.fpm_mask = (fpm_r != fpm_r[0,0]).astype(int)
+                self.fpm_mask = (fpm_r != fpm_r[fpm_r.shape[0]-1,fpm_r.shape[0]-1]).astype(int)
                 self.fpm_ref_wavelength = fits.getheader(fpm_r_fname)['WAVELENC']
                 self.fpm_pixelscale_lamD = fits.getheader(fpm_r_fname)['PIXSCLLD']
             else:
@@ -165,11 +166,9 @@ class CGI():
         elif self.cgi_mode=='spc-spec': 
             self.optics_dir = cgi_dir/'spc-spec'            
             self.PUPIL = poppy.FITSOpticalElement('Roman Pupil', 
-#                                                   rotation=180*u.degree,
                                                   transmission=str(self.optics_dir/'pupil_SPC-20200617_1000.fits'),
                                                   planetype=PlaneType.pupil)
             self.SPM = poppy.FITSOpticalElement('SPM', 
-#                                                 rotation=180*u.degree,
                                                 transmission=str(self.optics_dir/'SPM_SPC-20200617_1000_rounded9_rotated.fits'),
                                                 planetype=PlaneType.pupil)
             self.LS = poppy.FITSOpticalElement('Lyot Stop',
@@ -211,14 +210,14 @@ class CGI():
         self.dm_diam = 46.3*u.mm
         self.act_spacing = 0.9906*u.mm
         
-        
-        
         self.DM1 = poppy.ContinuousDeformableMirror(dm_shape=(self.Nact,self.Nact), name='DM1', 
-                                                    actuator_spacing=self.act_spacing, radius=self.dm_diam/2,
+                                                    actuator_spacing=self.act_spacing, 
+#                                                     radius=self.dm_diam/2,
                                                     inclination_x=0,inclination_y=9.65,
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
         self.DM2 = poppy.ContinuousDeformableMirror(dm_shape=(self.Nact,self.Nact), name='DM2', 
-                                                    actuator_spacing=self.act_spacing, radius=self.dm_diam/2,
+                                                    actuator_spacing=self.act_spacing, 
+#                                                     radius=self.dm_diam/2,
                                                     inclination_x=0,inclination_y=9.65,
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
     
@@ -378,23 +377,6 @@ class CGI():
             wfs = hlc.run(self)
         else:
             wfs = spc.run(self)
-            
-        if not self.return_intermediates:
-            wfs = wfs[-1]
-            
-        if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
-            
-        return wfs
-
-    def calc_psf_v2(self, quiet=False):
-        start = time.time()
-        if not quiet: print('Propagating wavelength {:.3f}.'.format(self.wavelength.to(u.nm)))
-            
-        self.init_inwave()
-        if self.cgi_mode=='hlc':
-            wfs = hlc_v2.run(self)
-        else:
-            wfs = spc_v2.run(self)
             
         if not self.return_intermediates:
             wfs = wfs[-1]
