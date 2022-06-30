@@ -13,10 +13,11 @@ from poppy.poppy_core import PlaneType
 
 import ray
 
-from . import hlc, spc, polmap
+from . import hlc, spc, polmap, hlc_v2
 
 from importlib import reload
 reload(hlc)
+reload(hlc_v2)
 reload(spc)
 reload(polmap)
 
@@ -30,10 +31,13 @@ class CGI():
                  wavelength=None, 
                  npsf=64, psf_pixelscale=13e-6*u.m/u.pix, psf_pixelscale_lamD=None, interp_order=3,
                  offset=(0,0), 
-                 use_fpm=True, use_fieldstop=True, 
-                 use_pupil_defocus=True, use_opds=False, 
-                 polaxis=0, 
-                 return_intermediates=False):
+                 use_fpm=True, 
+                 use_fieldstop=True, 
+                 use_pupil_defocus=True, 
+                 use_opds=False, 
+                 dm1_ref=np.zeros((48,48)),
+                 dm2_ref=np.zeros((48,48)),
+                 polaxis=0):
         
         self.cgi_mode = cgi_mode
         
@@ -42,7 +46,7 @@ class CGI():
             self.wavelength_c = 575e-9*u.m
             self.npix = 310
             self.oversample = 1024/310
-            self.D = self.pupil_diam*self.npix/309
+            self.D = self.pupil_diam
         elif self.cgi_mode=='spc-spec':
             self.wavelength_c = 730e-9*u.m
             self.npix = 1000
@@ -88,10 +92,21 @@ class CGI():
         
         self.init_mode_optics()
         self.init_dms()
+        self.set_dm1(dm1_ref)
+        self.set_dm2(dm2_ref)
+        
         if self.use_opds: 
             self.init_opds()
-        
-        self.return_intermediates = return_intermediates
+            self.optics = ['pupil', 'primary', 'secondary', 'poma_fold', 'm3', 'm4', 'm5', 'tt_fold', 'fsm', 'oap1', 
+                           'focm', 'oap2', 'dm1', 'dm2', 'oap3', 'fold3', 'oap4', 'pupilmask', 'oap5', 'fpm', 'oap6',
+                           'lyotstop', 'oap7', 'fieldstop', 'oap8', 'filter', 
+                           'imaging_lens_lens1', 'imaging_lens_lens2', 'fold4', 'image']
+            
+        else:
+            self.optics = ['pupil', 'primary', 'secondary', 'poma_fold', 'm3', 'm4', 'm5', 'tt_fold', 'fsm', 'oap1', 
+                           'focm', 'oap2', 'dm1', 'dm2', 'oap3', 'fold3', 'oap4', 'pupilmask', 'oap5', 'fpm', 'oap6',
+                           'lyotstop', 'oap7', 'fieldstop', 'oap8', 'filter', 
+                           'imaging_lens_lens1', 'imaging_lens_lens2', 'fold4', 'image']
         
     def copy_mode_settings(self, nactors=1):
         settings = []
@@ -106,8 +121,9 @@ class CGI():
                              'use_fieldstop':self.use_fieldstop,
                              'use_pupil_defocus':self.use_pupil_defocus,
                              'use_opds':self.use_opds, 
-                             'polaxis':self.polaxis,
-                             'return_intermediates':self.return_intermediates})
+                             'dm1_ref':self.get_dm1(),
+                             'dm2_ref':self.get_dm2(),
+                             'polaxis':self.polaxis,})
         return settings
            
     def init_mode_optics(self):
@@ -115,8 +131,15 @@ class CGI():
         
         if self.cgi_mode=='hlc':
             self.optics_dir = cgi_dir/'hlc'
+#             self.PUPIL = poppy.FITSOpticalElement('Roman Pupil', 
+#                                                   transmission=str(self.optics_dir/'pupil.fits'),
+#                                                   planetype=PlaneType.pupil)
             self.PUPIL = poppy.FITSOpticalElement('Roman Pupil', 
-                                                  transmission=str(self.optics_dir/'pupil.fits'),
+                                                  transmission=str(self.optics_dir/'pupil_n310_new.fits'),
+                                                  pixelscale=self.pupil_diam.value / 310,
+#                                                   rotation=180, 
+#                                                   shift_x=-self.pupil_diam.value / 310,
+#                                                   shift_y=-self.pupil_diam.value / 310,
                                                   planetype=PlaneType.pupil)
             self.SPM = poppy.ScalarTransmission('SPM Plane (No Optic)', planetype=PlaneType.pupil)
             if self.use_fpm:
@@ -153,13 +176,21 @@ class CGI():
             else:
                 self.FPM = None
             
+#             self.LS = poppy.FITSOpticalElement('Lyot Stop', 
+#                                                transmission=str(self.optics_dir/'lyot_rotated.fits'), 
+#                                                planetype=PlaneType.pupil)
             self.LS = poppy.FITSOpticalElement('Lyot Stop', 
-                                               transmission=str(self.optics_dir/'lyot_rotated.fits'), 
+                                               transmission=str(self.optics_dir/'lyot_hlc_n310_new.fits'), 
+                                               pixelscale=5.50105901118828e-05 * 309/310,
+#                                                rotation=180,
+#                                                shift_x=-5.50105901118828e-05 * 309/310,
+#                                                shift_y=-5.50105901118828e-05 * 309/310,
                                                planetype=PlaneType.pupil)
             
             if self.use_fieldstop: 
-                radius = 9.7/(309/(self.npix*self.oversample)) * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m
-                self.fieldstop = poppy.CircularAperture(radius=radius, name='HLC Field Stop')
+#                 radius = 9.7/(310/(self.npix*self.oversample)) * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m
+                radius = 9.7*self.oversample * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m * 1.0
+                self.fieldstop = poppy.CircularAperture(radius=radius, name='HLC Field Stop', gray_pixel=True)
             else: 
                 self.fieldstop = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Field Stop Plane (No Optic)')
                 
@@ -203,7 +234,7 @@ class CGI():
             self.use_fieldstop = False
             
         self.detector = poppy.Detector(pixelscale=self.psf_pixelscale, fov_pixels=self.npsf, interp_order=self.interp_order)
-        
+#         self.detector = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Detector')
     # DM methods
     def init_dms(self):
         self.Nact = 48
@@ -213,12 +244,14 @@ class CGI():
         self.DM1 = poppy.ContinuousDeformableMirror(dm_shape=(self.Nact,self.Nact), name='DM1', 
                                                     actuator_spacing=self.act_spacing, 
 #                                                     radius=self.dm_diam/2,
-                                                    inclination_x=0,inclination_y=9.65,
+#                                                     inclination_x=0,inclination_y=9.65,
+                                                    inclination_x=9.65,inclination_y=0,
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
         self.DM2 = poppy.ContinuousDeformableMirror(dm_shape=(self.Nact,self.Nact), name='DM2', 
                                                     actuator_spacing=self.act_spacing, 
-#                                                     radius=self.dm_diam/2,
-                                                    inclination_x=0,inclination_y=9.65,
+                                                    radius=self.dm_diam/2,
+#                                                     inclination_x=0,inclination_y=9.65,
+                                                    inclination_x=9.65,inclination_y=0,
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
     
     def reset_dms(self):
@@ -235,11 +268,17 @@ class CGI():
         
     def add_dm1(self, dm_command):
         dm_command = self.check_dm_command_shape(dm_command)
-        self.DM1.set_surface(self.DM1.surface.get() + dm_command) # I should make the DM.surface attribute be Numpy no matter what
+        self.DM1.set_surface(self.get_dm1() + dm_command) # I should make the DM.surface attribute be Numpy no matter what
         
     def add_dm2(self, dm_command):
         dm_command = self.check_dm_command_shape(dm_command)
-        self.DM2.set_surface(self.DM2.surface.get() + dm_command)
+        self.DM2.set_surface(self.get_dm2() + dm_command)
+        
+    def get_dm1(self):
+        return self.DM1.surface.get()
+        
+    def get_dm2(self):
+        return self.DM2.surface.get()
     
     def check_dm_command_shape(self, dm_command):
         if dm_command.shape[0]==self.Nact**2 or dm_command.shape[1]==self.Nact**2: # passes if shape does not have 2 values
@@ -368,22 +407,36 @@ class CGI():
                                             opd=str(opddir/'roman_phasec_LENS_phase_error_V1.0.fits'), 
                                             opdunits=opdunits, planetype=PlaneType.intermediate)
 
+    def calc_wfs(self, quiet=False):
+        start = time.time()
+        if not quiet: print('Propagating wavelength {:.3f}.'.format(self.wavelength.to(u.nm)))
+            
+        self.init_inwave()
+        if self.cgi_mode=='hlc':
+            wfs = hlc.run(self, return_intermediates=True)
+        else:
+            wfs = spc.run(self, return_intermediates=True)
+            
+        if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
+            
+        return wfs
+    
+    
     def calc_psf(self, quiet=False):
         start = time.time()
         if not quiet: print('Propagating wavelength {:.3f}.'.format(self.wavelength.to(u.nm)))
             
         self.init_inwave()
         if self.cgi_mode=='hlc':
-            wfs = hlc.run(self)
+            wfs = hlc.run(self, return_intermediates=False)
         else:
-            wfs = spc.run(self)
-            
-        if not self.return_intermediates:
-            wfs = wfs[-1]
+            wfs = spc.run(self, return_intermediates=False)
             
         if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
             
-        return wfs
+        return wfs[-1]
+    
+    
     
 CGIR = ray.remote(CGI)
 

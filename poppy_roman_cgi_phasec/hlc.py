@@ -11,7 +11,7 @@ import numpy as np
 import astropy.units as u
 import copy
 
-def run(HLC):    
+def run(HLC, return_intermediates=False):    
     # Define various optic focal lengths, diameters, and distances between optics.
     fl_pri = 2.838279206904720*u.m
     sm_despace_m = 0*u.m
@@ -220,10 +220,12 @@ def run(HLC):
     fosys2.add_optic(fold4, distance=d_lens_2_pp2_fold4)
 
     fosys2.add_optic(HLC.detector, distance=d_fold4_image)
+
+#     fosys2.add_optic(HLC.detector, distance=d_lens_2_pp2_fold4 + d_fold4_image)
     
     # Calculate a psf from the first optical system to retrieve the final wavefront at the FPM plane 
     fpm_hdu, wfs_to_fpm = fosys1.calc_psf(wavelength=HLC.wavelength, inwave=HLC.inwave, 
-                                          return_final=True, return_intermediates=HLC.return_intermediates)
+                                          return_final=True, return_intermediates=return_intermediates)
     inwave2 = copy.deepcopy(wfs_to_fpm[-1]) # copy Wavefront object for use in the post FPM system
     
     if HLC.use_fpm: 
@@ -231,7 +233,7 @@ def run(HLC):
         nfpm = HLC.fpm_phasor.shape[0]
         n = inwave2.wavefront.shape[0]
         nfpmlamD = nfpm*fpm_pxscl_lamD*inwave2.oversample
-        mft = poppy.matrixDFT.MatrixFourierTransform(centering='ADJUSTABLE')
+        mft = poppy.matrixDFT.MatrixFourierTransform(centering='FFTSTYLE')
 
         # Apply the FPM with MFTs
         inwave2.wavefront = accel_math._ifftshift(inwave2.wavefront)
@@ -250,9 +252,9 @@ def run(HLC):
         inwave2.wavefront = accel_math._fftshift(inwave2.wavefront)
         
     psf_hdu, wfs_from_fpm = fosys2.calc_psf(wavelength=HLC.wavelength, inwave=inwave2, normalize='none',
-                                            return_final=True, return_intermediates=HLC.return_intermediates,)
+                                            return_final=True, return_intermediates=return_intermediates,)
     
-    if HLC.return_intermediates:
+    if return_intermediates:
         wfs_to_fpm.pop(-1)
         wfs = wfs_to_fpm + wfs_from_fpm
     else: 
@@ -265,5 +267,6 @@ def run(HLC):
 #     0.21432764805243154 0.0030356875488610326 0.25243230860876475
 
 
-
+import ray
+runner = ray.remote(run)
 
