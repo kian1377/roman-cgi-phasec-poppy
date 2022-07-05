@@ -97,13 +97,13 @@ class CGI():
         
         if self.use_opds: 
             self.init_opds()
-            self.optics = ['pupil', 'primary', 'secondary', 'poma_fold', 'm3', 'm4', 'm5', 'tt_fold', 'fsm', 'oap1', 
+            self.optics = ['pupil', 'polmap', 'primary', 'secondary', 'poma_fold', 'm3', 'm4', 'm5', 'tt_fold', 'fsm', 'oap1', 
                            'focm', 'oap2', 'dm1', 'dm2', 'oap3', 'fold3', 'oap4', 'pupilmask', 'oap5', 'fpm', 'oap6',
                            'lyotstop', 'oap7', 'fieldstop', 'oap8', 'filter', 
                            'imaging_lens_lens1', 'imaging_lens_lens2', 'fold4', 'image']
             
         else:
-            self.optics = ['pupil', 'primary', 'secondary', 'poma_fold', 'm3', 'm4', 'm5', 'tt_fold', 'fsm', 'oap1', 
+            self.optics = ['pupil', 'polmap', 'primary', 'secondary', 'poma_fold', 'm3', 'm4', 'm5', 'tt_fold', 'fsm', 'oap1', 
                            'focm', 'oap2', 'dm1', 'dm2', 'oap3', 'fold3', 'oap4', 'pupilmask', 'oap5', 'fpm', 'oap6',
                            'lyotstop', 'oap7', 'fieldstop', 'oap8', 'filter', 
                            'imaging_lens_lens1', 'imaging_lens_lens2', 'fold4', 'image']
@@ -136,7 +136,7 @@ class CGI():
 #                                                   planetype=PlaneType.pupil)
             self.PUPIL = poppy.FITSOpticalElement('Roman Pupil', 
                                                   transmission=str(self.optics_dir/'pupil_n310_new.fits'),
-                                                  pixelscale=self.pupil_diam.value / 310,
+                                                  pixelscale=self.pupil_diam.value/310,
 #                                                   rotation=180, 
 #                                                   shift_x=-self.pupil_diam.value / 310,
 #                                                   shift_y=-self.pupil_diam.value / 310,
@@ -188,8 +188,7 @@ class CGI():
                                                planetype=PlaneType.pupil)
             
             if self.use_fieldstop: 
-#                 radius = 9.7/(310/(self.npix*self.oversample)) * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m
-                radius = 9.7*self.oversample * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m * 1.0
+                radius = 9.7/(310/(self.npix*self.oversample)) * (self.wavelength_c/self.wavelength) * 7.229503001768824e-06*u.m
                 self.fieldstop = poppy.CircularAperture(radius=radius, name='HLC Field Stop', gray_pixel=True)
             else: 
                 self.fieldstop = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Field Stop Plane (No Optic)')
@@ -232,9 +231,20 @@ class CGI():
                                                planetype=PlaneType.pupil)
             self.fieldstop = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Field Stop Plane (No Optic)')
             self.use_fieldstop = False
+        
+        if self.polaxis!=0:
+            polfile = cgi_dir/'pol'/'phasec_pol'
+            polmap_amp, polmap_opd = polmap.polmap( str(polfile), 
+                                                   self.wavelength, 
+                                                   self.npix, int(self.oversample*self.npix), self.polaxis )
+            self.POLMAP = poppy.ArrayOpticalElement(name='Polarization Error Map', 
+                                                    opd=polmap_opd, transmission=polmap_amp,
+                                                    pixelscale=self.pupil_diam/(self.npix*u.pix))
+        else:
+            self.POLMAP = poppy.ScalarTransmission('No Polarization Error Map')
             
         self.detector = poppy.Detector(pixelscale=self.psf_pixelscale, fov_pixels=self.npsf, interp_order=self.interp_order)
-#         self.detector = poppy.ScalarTransmission(planetype=PlaneType.intermediate, name='Detector')
+        
     # DM methods
     def init_dms(self):
         self.Nact = 48
@@ -244,14 +254,14 @@ class CGI():
         self.DM1 = poppy.ContinuousDeformableMirror(dm_shape=(self.Nact,self.Nact), name='DM1', 
                                                     actuator_spacing=self.act_spacing, 
 #                                                     radius=self.dm_diam/2,
-#                                                     inclination_x=0,inclination_y=9.65,
-                                                    inclination_x=9.65,inclination_y=0,
+                                                    inclination_x=0,inclination_y=9.65,
+#                                                     inclination_x=9.65,inclination_y=0,
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
         self.DM2 = poppy.ContinuousDeformableMirror(dm_shape=(self.Nact,self.Nact), name='DM2', 
                                                     actuator_spacing=self.act_spacing, 
-                                                    radius=self.dm_diam/2,
-#                                                     inclination_x=0,inclination_y=9.65,
-                                                    inclination_x=9.65,inclination_y=0,
+#                                                     radius=self.dm_diam/2,
+                                                    inclination_x=0,inclination_y=9.65,
+#                                                     inclination_x=9.65,inclination_y=0,
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
     
     def reset_dms(self):
@@ -294,16 +304,12 @@ class CGI():
     def init_inwave(self):
         inwave = poppy.FresnelWavefront(beam_radius=self.D/2, wavelength=self.wavelength,
                                         npix=self.npix, oversample=self.oversample)
-        if self.polaxis!=0: 
-            polfile = cgi_dir/'pol'/'phasec_pol'
-            polmap.polmap( inwave, str(polfile), self.npix, self.polaxis )
-            
+        
         if self.offset[0]>0 or self.offset[1]>0:
             inwave.tilt(Xangle=self.offset[0]*self.as_per_lamD, Yangle=self.offset[1]*self.as_per_lamD)
-        
-        inwave.w_0 = self.pupil_diam/2
-        
+            
         self.inwave = inwave
+#         return
     
     
     def init_opds(self):
@@ -406,6 +412,8 @@ class CGI():
         self.lens_opd = poppy.FITSOpticalElement('LENS OPD', 
                                             opd=str(opddir/'roman_phasec_LENS_phase_error_V1.0.fits'), 
                                             opdunits=opdunits, planetype=PlaneType.intermediate)
+        
+        return
 
     def calc_wfs(self, quiet=False):
         start = time.time()

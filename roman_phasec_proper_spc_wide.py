@@ -374,6 +374,10 @@ def run_spcw(cor_type='spc-wide', lambda_m=825e-9, final_sampling_lam0=0.2, outp
             pupil = 0
         else:
             proper.prop_multiply( wavefront, trim(pupil_array,n) )
+            
+    if display_wfs: display_wave(wavefront, 'pupil')
+    if save_wfs: save_wf(wavefront, 'pupil')
+        
     if polaxis != 0: polmap( wavefront, polfile, pupil_diam_pix, polaxis )
     proper.prop_define_entrance( wavefront )
 

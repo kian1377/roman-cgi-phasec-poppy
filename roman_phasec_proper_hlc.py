@@ -404,6 +404,10 @@ def run_hlc(cor_type='hlc', lambda_m=575e-9, final_sampling_lam0=0.1, output_dim
             pupil = 0
         else:
             proper.prop_multiply( wavefront, trim(pupil_array,n) )
+            
+    if display_wfs: display_wave(wavefront, 'pupil')
+    if save_wfs: save_wf(wavefront, 'pupil')
+        
     if polaxis != 0: polmap( wavefront, polfile, pupil_diam_pix, polaxis )
     proper.prop_define_entrance( wavefront )
 

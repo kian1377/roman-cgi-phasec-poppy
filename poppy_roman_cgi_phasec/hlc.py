@@ -132,10 +132,11 @@ def run(HLC, return_intermediates=False):
     fold4 = poppy.CircularAperture(radius=diam_fold4/2,name="Fold4")
         
     # Create the first part of the optical system
-    fosys1 = poppy.FresnelOpticalSystem(name='HLC Pre-FPM', pupil_diameter=HLC.D, 
+    fosys1 = poppy.FresnelOpticalSystem(name='HLC Pre-FPM', pupil_diameter=HLC.pupil_diam, 
                                         npix=HLC.npix, beam_ratio=1/HLC.oversample, verbose=True)
     
     fosys1.add_optic(HLC.PUPIL)
+    fosys1.add_optic(HLC.POLMAP)
     fosys1.add_optic(primary)
     if HLC.use_opds: fosys1.add_optic(HLC.primary_opd)
         
