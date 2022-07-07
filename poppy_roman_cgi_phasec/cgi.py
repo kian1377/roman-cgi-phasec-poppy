@@ -137,11 +137,13 @@ class CGI():
             self.PUPIL = poppy.FITSOpticalElement('Roman Pupil', 
                                                   transmission=str(self.optics_dir/'pupil_n310_new.fits'),
                                                   pixelscale=self.pupil_diam.value/310,
-#                                                   rotation=180, 
-#                                                   shift_x=-self.pupil_diam.value / 310,
-#                                                   shift_y=-self.pupil_diam.value / 310,
                                                   planetype=PlaneType.pupil)
+    
             self.SPM = poppy.ScalarTransmission('SPM Plane (No Optic)', planetype=PlaneType.pupil)
+        
+            self.dm2_mask = poppy.FITSOpticalElement('DM2 Mask', 
+                                                     transmission=str(self.optics_dir/'dm2mask.fits'),
+                                                     planetype=PlaneType.intermediate)
             if self.use_fpm:
                 # Find nearest available FPM wavelength that matches specified wavelength and initialize the FPM data
                 lam_um = self.wavelength.value * 1e6
@@ -182,9 +184,6 @@ class CGI():
             self.LS = poppy.FITSOpticalElement('Lyot Stop', 
                                                transmission=str(self.optics_dir/'lyot_hlc_n310_new.fits'), 
                                                pixelscale=5.50105901118828e-05 * 309/310,
-#                                                rotation=180,
-#                                                shift_x=-5.50105901118828e-05 * 309/310,
-#                                                shift_y=-5.50105901118828e-05 * 309/310,
                                                planetype=PlaneType.pupil)
             
             if self.use_fieldstop: 
@@ -309,7 +308,6 @@ class CGI():
             inwave.tilt(Xangle=self.offset[0]*self.as_per_lamD, Yangle=self.offset[1]*self.as_per_lamD)
             
         self.inwave = inwave
-#         return
     
     
     def init_opds(self):
@@ -413,7 +411,6 @@ class CGI():
                                             opd=str(opddir/'roman_phasec_LENS_phase_error_V1.0.fits'), 
                                             opdunits=opdunits, planetype=PlaneType.intermediate)
         
-        return
 
     def calc_wfs(self, quiet=False):
         start = time.time()

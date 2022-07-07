@@ -71,7 +71,7 @@ def polmap( polfile, wavelength, pupil_diam_pix, n, condition, MUF=1.0 ):
 
 #     wavefront.wavefront *= poppy.utils.pad_or_crop_to_shape(amp*np.exp(1j*(2*np.pi/lambda_m)*MUF*pha), (n,n))
     amp = poppy.utils.pad_or_crop_to_shape(amp, (n,n))
-    opd = poppy.utils.pad_or_crop_to_shape( (2*np.pi/lambda_m)*MUF*pha, (n,n))
+    opd = poppy.utils.pad_or_crop_to_shape( MUF*pha, (n,n))
     
 #     amp = 0
 #     phase = 0
