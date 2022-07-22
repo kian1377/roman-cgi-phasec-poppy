@@ -82,9 +82,9 @@ class CGI():
             self.psf_pixelscale_lamD = 1/2 * 0.5e-6/self.wavelength_c.value * self.psf_pixelscale.to(u.m/u.pix).value/13e-6
         self.interp_order = interp_order # interpolation order for resampling wavefront at detector
         
+        # Statistics for noise (noise functionality not yet implemented)
         self.texp = 1*u.s
         self.peak_photon_flux = 1e8*u.photon/u.s
-        
         self.detector_gain = 1*u.electron/u.photon
         self.read_noise_std = 1.7*u.electron/u.photon
         self.well_depth = 3e4*u.electron
@@ -92,6 +92,9 @@ class CGI():
         
         self.init_mode_optics()
         self.init_dms()
+        
+        self.dm1_ref = dm1_ref
+        self.dm2_ref = dm2_ref
         self.set_dm1(dm1_ref)
         self.set_dm2(dm2_ref)
         
@@ -264,23 +267,23 @@ class CGI():
                                                     influence_func=str(dm_dir/'proper_inf_func.fits'))
     
     def reset_dms(self):
-        self.DM1.set_surface( np.zeros((self.Nact, self.Nact)) )
-        self.DM2.set_surface( np.zeros((self.Nact, self.Nact)) )
-            
+        self.set_dm1(self.dm1_ref)
+        self.set_dm2(self.dm2_ref)
+    
+    def flatten_dms(self):
+        self.set_dm1( np.zeros((self.Nact, self.Nact)) )
+        self.set_dm2( np.zeros((self.Nact, self.Nact)) )
+        
     def set_dm1(self, dm_command):
-        dm_command = self.check_dm_command_shape(dm_command)
         self.DM1.set_surface(dm_command)
     
     def set_dm2(self, dm_command):
-        dm_command = self.check_dm_command_shape(dm_command)
         self.DM2.set_surface(dm_command)
         
     def add_dm1(self, dm_command):
-        dm_command = self.check_dm_command_shape(dm_command)
-        self.DM1.set_surface(self.get_dm1() + dm_command) # I should make the DM.surface attribute be Numpy no matter what
+        self.DM1.set_surface(self.get_dm1() + dm_command)
         
     def add_dm2(self, dm_command):
-        dm_command = self.check_dm_command_shape(dm_command)
         self.DM2.set_surface(self.get_dm2() + dm_command)
         
     def get_dm1(self):
@@ -288,6 +291,9 @@ class CGI():
         
     def get_dm2(self):
         return self.DM2.surface.get()
+    
+    def show_dms(self):
+        misc.myimshow2(self.get_dm1(), self.get_dm2(), 'DM1', 'DM2')
     
     def check_dm_command_shape(self, dm_command):
         if dm_command.shape[0]==self.Nact**2 or dm_command.shape[1]==self.Nact**2: # passes if shape does not have 2 values
@@ -299,16 +305,6 @@ class CGI():
         a = np.loadtxt( str( cgi_dir/'glass'/(glass+'_index.txt') ) )  # lambda_um index pairs
         f = interp1d( a[:,0], a[:,1], kind='cubic' )
         return f( self.wavelength.value*1e6 )
-
-    def init_inwave(self):
-        inwave = poppy.FresnelWavefront(beam_radius=self.D/2, wavelength=self.wavelength,
-                                        npix=self.npix, oversample=self.oversample)
-        
-        if self.offset[0]>0 or self.offset[1]>0:
-            inwave.tilt(Xangle=self.offset[0]*self.as_per_lamD, Yangle=self.offset[1]*self.as_per_lamD)
-            
-        self.inwave = inwave
-    
     
     def init_opds(self):
         opddir = cgi_dir/'opd-maps'
@@ -411,7 +407,16 @@ class CGI():
                                             opd=str(opddir/'roman_phasec_LENS_phase_error_V1.0.fits'), 
                                             opdunits=opdunits, planetype=PlaneType.intermediate)
         
-
+        
+    def init_inwave(self):
+        inwave = poppy.FresnelWavefront(beam_radius=self.D/2, wavelength=self.wavelength,
+                                        npix=self.npix, oversample=self.oversample)
+        
+        if self.offset[0]>0 or self.offset[1]>0:
+            inwave.tilt(Xangle=self.offset[0]*self.as_per_lamD, Yangle=self.offset[1]*self.as_per_lamD)
+            
+        self.inwave = inwave
+        
     def calc_wfs(self, quiet=False):
         start = time.time()
         if not quiet: print('Propagating wavelength {:.3f}.'.format(self.wavelength.to(u.nm)))
@@ -425,7 +430,6 @@ class CGI():
         if not quiet: print('PSF calculated in {:.3f}s'.format(time.time()-start))
             
         return wfs
-    
     
     def calc_psf(self, quiet=False):
         start = time.time()
@@ -441,7 +445,16 @@ class CGI():
             
         return wfs[-1]
     
-    
+    def snap(self):
+        start = time.time()
+        
+        self.init_inwave()
+        if self.cgi_mode=='hlc':
+            wfs = hlc.run(self, return_intermediates=False)
+        else:
+            wfs = spc.run(self, return_intermediates=False)
+            
+        return wfs[-1].intensity.get()
     
 CGIR = ray.remote(CGI)
 
